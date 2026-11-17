@@ -1,0 +1,12 @@
+services:
+  pcforge:
+    build:
+      context: ..
+      dockerfile: PCFORGE-deploy/Dockerfile
+    container_name: pcforge-site
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+    restart: unless-stopped
