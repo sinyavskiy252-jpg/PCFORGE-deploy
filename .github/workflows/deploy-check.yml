@@ -27,7 +27,7 @@ jobs:
           path: PCsait
 
       - name: Validate Compose configuration
-        run: docker compose -f PCFORGE-deploy/compose.yaml config
+        run: docker compose --env-file PCsait/.env.example -f PCFORGE-deploy/compose.yaml config
 
       - name: Build PCFORGE image
-        run: docker compose -f PCFORGE-deploy/compose.yaml build
+        run: docker compose --env-file PCsait/.env.example -f PCFORGE-deploy/compose.yaml build
