@@ -40,3 +40,7 @@ docker compose -f PCFORGE-deploy/compose.yaml down
 ## Связанный репозиторий
 
 Исходный код сайта находится в [PCsait](https://github.com/sinyavskiy252-jpg/PCsait).
+
+## Обновление образа после изменений Frontend
+
+Основной исходный код находится в отдельном репозитории [PCsait](https://github.com/sinyavskiy252-jpg/PCsait). Изменение Frontend само по себе не запускает workflow этого репозитория. После слияния изменений в `PCsait/main` запусти workflow **PCFORGE deployment check** вручную во вкладке Actions или создай небольшой коммит в этом репозитории. Workflow повторно получает актуальный `PCsait/main`, проверяет Compose, собирает Docker-образ и публикует его в GHCR.
