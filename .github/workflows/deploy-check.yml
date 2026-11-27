@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   docker-build:
@@ -26,8 +27,84 @@ jobs:
           ref: main
           path: PCsait
 
-      - name: Validate Compose configuration
-        run: docker compose --env-file PCsait/.env.example -f PCFORGE-deploy/compose.yaml config
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build PCFORGE image
-        run: docker compose --env-file PCsait/.env.example -f PCFORGE-deploy/compose.yaml build
+      - name: Create frontend environment file
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+        run: |
+          {
+            echo "VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY"
+            echo "VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN"
+            echo "VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID"
+            echo "VITE_FIREBASE_STORAGE_BUCKET=$VITE_FIREBASE_STORAGE_BUCKET"
+            echo "VITE_FIREBASE_MESSAGING_SENDER_ID=$VITE_FIREBASE_MESSAGING_SENDER_ID"
+            echo "VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID"
+          } > PCsait/.env
+
+      - name: Validate Compose configuration
+        run: docker compose --env-file PCsait/.env -f PCFORGE-deploy/compose.yaml config --quiet
+
+      - name: Build local image for pull requests
+        if: github.event_name == 'pull_request'
+        run: docker compose --env-file PCsait/.env -f PCFORGE-deploy/compose.yaml build
+
+      - name: Check Firebase build variables
+        if: github.event_name != 'pull_request'
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+        run: |
+          test -n "$VITE_FIREBASE_API_KEY"
+          test -n "$VITE_FIREBASE_AUTH_DOMAIN"
+          test -n "$VITE_FIREBASE_PROJECT_ID"
+          test -n "$VITE_FIREBASE_STORAGE_BUCKET"
+          test -n "$VITE_FIREBASE_MESSAGING_SENDER_ID"
+          test -n "$VITE_FIREBASE_APP_ID"
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare image tags
+        if: github.event_name != 'pull_request'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/sinyavskiy252-jpg/pcforge-site
+          tags: |
+            type=raw,value=latest
+            type=sha
+
+      - name: Build and publish image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: PCFORGE-deploy/Dockerfile
+          push: true
+          build-args: |
+            VITE_FIREBASE_API_KEY=${{ secrets.VITE_FIREBASE_API_KEY }}
+            VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+            VITE_FIREBASE_PROJECT_ID=${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+            VITE_FIREBASE_STORAGE_BUCKET=${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+            VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+            VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
